@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { readFile, unlink } from "fs/promises";
+import { readFile } from "fs/promises";
 import path from "path";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,9 +24,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   await prisma.auditLog.create({
     data: { action: "DOWNLOAD", userId: session.user.id, documentId: id },
   });
-
-  await prisma.document.update({ where: { id }, data: { resultPath: null } });
-  await unlink(doc.resultPath).catch(() => {});
 
   return new NextResponse(buffer, {
     headers: {

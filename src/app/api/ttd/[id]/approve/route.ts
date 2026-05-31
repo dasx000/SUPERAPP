@@ -5,6 +5,8 @@ import { stampPdf } from "@/lib/stamp";
 import { access, unlink } from "fs/promises";
 import path from "path";
 
+const PREVIEW_DIR = path.join(process.cwd(), "uploads", "previews");
+
 const SPESIMEN_PATH = path.join(process.cwd(), "uploads", "spesimen", "katimker.png");
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -27,13 +29,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Spesimen TTD KATIMKER belum diatur" }, { status: 400 });
   }
 
-  const resultPath = await stampPdf(doc.originalPath, SPESIMEN_PATH, id);
+  try {
+    await access(doc.originalPath);
+  } catch {
+    return NextResponse.json({ error: "File original tidak ditemukan, minta pengguna upload ulang" }, { status: 400 });
+  }
+
+  let resultPath: string;
+  try {
+    resultPath = await stampPdf(doc.originalPath, SPESIMEN_PATH, id);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Gagal memproses PDF";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 
   await unlink(doc.originalPath).catch(() => {});
+  await unlink(path.join(PREVIEW_DIR, `${id}_preview.pdf`)).catch(() => {});
 
   await prisma.document.update({
     where: { id },
-    data: { status: "DISETUJUI", resultPath },
+    data: { status: "DISETUJUI", resultPath, approvedAt: new Date() },
   });
 
   await prisma.auditLog.create({

@@ -1,4 +1,5 @@
 #!/bin/sh
 set -e
 npx prisma migrate deploy
-exec node server.js
+pm2 start ecosystem.config.js --env production || pm2 restart ecosystem.config.js --env production
+pm2 save

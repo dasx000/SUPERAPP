@@ -39,6 +39,7 @@ model Document {
   resultPath   String?
   status       DocStatus @default(MENUNGGU)
   rejectReason String?
+  approvedAt   DateTime?
   uploaderId   String
   uploader     User      @relation(fields: [uploaderId], references: [id])
   createdAt    DateTime  @default(now())

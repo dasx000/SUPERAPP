@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { stampPreview } from "@/lib/stamp";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   const uploadDir = path.join(process.cwd(), "uploads", "originals");
   await mkdir(uploadDir, { recursive: true });
 
-  const filename = `${Date.now()}-${file.name.replace(/\s/g, "_")}`;
+  const filename = `${file.name.replace(/\s/g, "_")}-${Date.now()}.pdf`;
   const filepath = path.join(uploadDir, filename);
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(filepath, buffer);
@@ -37,6 +38,8 @@ export async function POST(req: NextRequest) {
       documentId: doc.id,
     },
   });
+
+  stampPreview(filepath, doc.id).catch(() => {});
 
   return NextResponse.json({ id: doc.id, filename: doc.filename }, { status: 201 });
 }

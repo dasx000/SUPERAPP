@@ -7,11 +7,15 @@ Aplikasi web untuk penandatanganan dokumen PDF secara elektronik di lingkup kerj
 ## Fitur
 
 - Upload dokumen PDF berisi placeholder posisi tanda tangan
+- Preview otomatis setelah upload (PDF di-stamp dengan contoh TTD, buka di tab baru)
+- Ganti file dokumen selama status masih MENUNGGU atau DITOLAK
 - Antrian persetujuan oleh Admin/Ketua Tim
 - Penempelan gambar TTD otomatis pada posisi placeholder
 - Download dokumen hasil TTD
+- File hasil TTD otomatis dihapus setelah 30 hari (via cron job)
 - Log audit setiap aktivitas (upload, ACC, tolak, unduh)
 - Tiga role pengguna: Penyuluh, Admin, Superadmin
+- Pagination daftar dokumen (5 per halaman)
 
 ---
 
@@ -32,7 +36,7 @@ Aplikasi web untuk penandatanganan dokumen PDF secara elektronik di lingkup kerj
 Dokumen PDF harus memuat teks penanda posisi tanda tangan:
 
 ```
-$(ttd_bupati)
+$(ttd_katimker)
 ```
 
 Sistem akan otomatis mencari teks ini, menghapusnya, lalu menempelkan gambar TTD tepat di posisi tersebut.
@@ -83,7 +87,7 @@ Isi **persis** seperti ini (ganti nilai yang diperlukan):
 DATABASE_URL="postgresql://postgres:GANTI_PASSWORD@localhost:5432/ttd_superapp"
 NEXTAUTH_SECRET="isi-random-string-panjang-minimal-32-karakter"
 NEXTAUTH_URL="http://IP_VPS_KAMU:3001"
-POSTGRES_PASSWORD=GANTI_PASSWORD
+CRON_SECRET="isi-random-string-untuk-cron"
 ```
 
 > `DATABASE_URL` boleh pakai `localhost` — docker-compose akan override otomatis ke `@db:5432`.
@@ -172,9 +176,9 @@ curl ifconfig.me
 
 ### Prasyarat
 
-- Node.js 20+
+- Node.js 24+
 - Python 3 + PyMuPDF (`pip install pymupdf`)
-- PostgreSQL berjalan di lokal
+- PostgreSQL 16 berjalan di lokal
 
 ### 1. Clone & Install
 
@@ -196,7 +200,7 @@ Sesuaikan isi `.env` untuk lokal:
 DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/ttd_superapp"
 NEXTAUTH_SECRET="development-secret-key"
 NEXTAUTH_URL="http://localhost:3001"
-POSTGRES_PASSWORD=PASSWORD
+CRON_SECRET="development-cron-secret"
 ```
 
 ### 3. Setup Database
@@ -234,7 +238,7 @@ SUPERAPP/
 │   ├── lib/
 │   │   ├── auth.ts
 │   │   ├── prisma.ts
-│   │   └── stamp.ts
+│   │   └── stamp.ts            # stampPdf (ACC) + stampPreview (upload)
 │   └── generated/prisma/       # Auto-generated Prisma client
 ├── scripts/
 │   ├── create-superadmin.ts    # Script buat akun SUPERADMIN
@@ -243,7 +247,11 @@ SUPERAPP/
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
-├── uploads/                    # File PDF (tidak di-commit ke git)
+├── uploads/
+│   ├── originals/              # PDF asli (dihapus saat ACC)
+│   ├── previews/               # PDF preview contoh TTD (dihapus saat ACC)
+│   ├── results/                # PDF ber-TTD (dihapus otomatis 30 hari)
+│   └── spesimen/               # Gambar PNG tanda tangan
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
@@ -258,11 +266,14 @@ Semua endpoint membutuhkan sesi login kecuali yang ditandai publik.
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
 | `POST` | `/api/auth/register` | Publik | Daftar akun baru |
-| `POST` | `/api/ttd/upload` | Penyuluh+ | Upload PDF |
+| `POST` | `/api/ttd/upload` | Penyuluh+ | Upload PDF + generate preview |
 | `GET` | `/api/ttd/list` | Penyuluh+ | Daftar dokumen milik sendiri |
+| `GET` | `/api/ttd/[id]/preview` | Owner / Admin+ | Lihat preview PDF (tab baru) |
+| `POST` | `/api/ttd/[id]/replace` | Owner | Ganti file (MENUNGGU/DITOLAK) |
 | `POST` | `/api/ttd/[id]/approve` | Admin+ | ACC dokumen |
 | `POST` | `/api/ttd/[id]/reject` | Admin+ | Tolak dokumen |
 | `GET` | `/api/ttd/[id]/download` | Penyuluh+ | Unduh PDF ber-TTD |
+| `POST` | `/api/cron/cleanup` | Cron (secret) | Hapus file results > 30 hari |
 
 ---
 
@@ -281,7 +292,7 @@ ufw allow 3001
 ```
 
 **Placeholder tidak terdeteksi**
-Pastikan teks di dalam PDF persis `$(ttd_bupati)` — huruf kecil semua, tanpa spasi ekstra.
+Pastikan teks di dalam PDF persis `$(ttd_katimker)` — huruf kecil semua, tanpa spasi ekstra.
 
 **Spesimen TTD belum diatur**
 Admin harus upload file PNG tanda tangan melalui menu Spesimen TTD. Gunakan PNG dengan background transparan, ukuran di bawah 300KB.
@@ -291,3 +302,21 @@ Admin harus upload file PNG tanda tangan melalui menu Spesimen TTD. Gunakan PNG 
 docker compose exec app npx tsx scripts/create-superadmin.ts
 ```
 Masukkan email yang sama — password akan di-update.
+
+---
+
+## Cron Job Cleanup (VPS)
+
+Setelah deploy, tambahkan ke crontab agar file hasil TTD dihapus otomatis tiap 30 hari:
+
+```bash
+crontab -e
+```
+
+Tambahkan baris ini (jalan tiap hari jam 02.00):
+
+```
+0 2 * * * curl -s -X POST http://localhost:3001/api/cron/cleanup -H "Authorization: Bearer CRON_SECRET_KAMU"
+```
+
+Ganti `CRON_SECRET_KAMU` dengan nilai `CRON_SECRET` di file `.env`.

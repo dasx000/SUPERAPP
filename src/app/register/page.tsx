@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +28,7 @@ export default function RegisterPage() {
       setError(data.error ?? "Gagal mendaftar");
       setLoading(false);
     } else {
-      router.push("/login?registered=1");
+      window.location.href = "/login?registered=1";
     }
   }
 
@@ -48,7 +46,7 @@ export default function RegisterPage() {
               name="name"
               type="text"
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Nama Anda"
             />
           </div>
@@ -58,7 +56,7 @@ export default function RegisterPage() {
               name="email"
               type="email"
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="email@contoh.com"
             />
           </div>
@@ -69,7 +67,7 @@ export default function RegisterPage() {
               type="password"
               required
               minLength={6}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="Min. 6 karakter"
             />
           </div>

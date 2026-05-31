@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +24,7 @@ export default function LoginPage() {
       setError("Email atau password salah");
       setLoading(false);
     } else {
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     }
   }
 
@@ -44,7 +42,7 @@ export default function LoginPage() {
               name="email"
               type="email"
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="email@contoh.com"
             />
           </div>
@@ -54,7 +52,7 @@ export default function LoginPage() {
               name="password"
               type="password"
               required
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
               placeholder="••••••••"
             />
           </div>

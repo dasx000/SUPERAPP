@@ -2,7 +2,7 @@ import fitz
 import sys
 from pathlib import Path
 
-PLACEHOLDER = "$(ttd_bupati)"
+PLACEHOLDER = "$(ttd_katimker)"
 TTD_WIDTH = 296
 TTD_HEIGHT = 148
 OFFSET_Y = 52
