@@ -27,7 +27,7 @@ Aplikasi web untuk penandatanganan dokumen PDF secara elektronik di lingkup kerj
 | Autentikasi | NextAuth.js v5 |
 | Database | PostgreSQL 16 + Prisma ORM 7 |
 | PDF Stamping | Python 3 + PyMuPDF |
-| Deploy | Docker + Docker Compose |
+| Deploy | Node.js 24 + PM2 + Nginx |
 
 ---
 
@@ -53,19 +53,18 @@ Sistem akan otomatis mencari teks ini, menghapusnya, lalu menempelkan gambar TTD
 
 ---
 
-## Deploy ke VPS (Baru)
+## Deploy ke VPS
 
-> VPS hanya butuh **Docker** — tidak perlu Node.js, Python, atau PostgreSQL terinstall di sistem.
+### Prasyarat VPS
 
-### 1. Install Docker di VPS
+VPS harus sudah terinstall:
+- Node.js 24
+- PostgreSQL 16
+- Python 3 + pymupdf
+- Nginx
+- PM2 (`npm install -g pm2`)
 
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-### 2. Clone Repo
+### 1. Clone Repo
 
 ```bash
 git clone https://github.com/dasx000/SUPERAPP.git
@@ -75,55 +74,90 @@ cd SUPERAPP
 > Repo **private** — saat diminta password, gunakan **Personal Access Token** GitHub.
 > Buat di: GitHub → Settings → Developer Settings → Personal Access Tokens → Tokens (classic) → Generate new token → centang `repo`
 
-### 3. Buat File `.env`
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Setup Database PostgreSQL
+
+Buat database dan set password user `postgres`:
+
+```bash
+sudo -u postgres psql
+```
+
+Di dalam psql:
+
+```sql
+CREATE DATABASE ttd_superapp;
+ALTER USER postgres WITH PASSWORD 'PASSWORD_KAMU';
+\q
+```
+
+### 4. Buat File `.env`
 
 ```bash
 nano .env
 ```
 
-Isi **persis** seperti ini (ganti nilai yang diperlukan):
+Isi dengan nilai yang sesuai:
 
 ```env
-DATABASE_URL="postgresql://postgres:GANTI_PASSWORD@localhost:5432/ttd_superapp"
+DATABASE_URL="postgresql://postgres:PASSWORD_KAMU@localhost:5432/ttd_superapp"
 NEXTAUTH_SECRET="isi-random-string-panjang-minimal-32-karakter"
 NEXTAUTH_URL="http://IP_VPS_KAMU:3001"
+AUTH_TRUST_HOST=true
+UPLOAD_DIR="./uploads"
 CRON_SECRET="isi-random-string-untuk-cron"
 ```
 
-> `DATABASE_URL` boleh pakai `localhost` — docker-compose akan override otomatis ke `@db:5432`.
-> `POSTGRES_PASSWORD` harus sama dengan password di `DATABASE_URL`.
-
 Simpan: `Ctrl+X` → `Y` → Enter
 
-### 4. Jalankan Aplikasi
+> `PASSWORD_KAMU` harus sama antara `DATABASE_URL` dan yang di-set ke user postgres.
+> `AUTH_TRUST_HOST=true` wajib ada agar NextAuth tidak error saat diakses lewat IP.
+
+### 5. Generate Prisma Client & Build
 
 ```bash
-docker compose up -d --build
+npx prisma generate
+npm run build
 ```
 
-Build pertama kali membutuhkan **10–20 menit**. Tunggu sampai selesai.
-
-### 5. Cek Status
+### 6. Jalankan Aplikasi
 
 ```bash
-docker compose logs -f app
+sh scripts/start.sh
 ```
 
-Tunggu hingga muncul:
+Perintah ini akan:
+1. Menjalankan migrasi database secara otomatis
+2. Menjalankan aplikasi via PM2 di port 3001
 
-```
-✓ Ready in 0ms
-```
-
-### 6. Buat Akun SUPERADMIN
+Cek status PM2:
 
 ```bash
-docker compose exec app npx tsx scripts/create-superadmin.ts
+pm2 status
+```
+
+Pastikan status kolom `status` menunjukkan `online`.
+
+### 7. Buka Port Firewall
+
+```bash
+sudo ufw allow 3001
+```
+
+### 8. Buat Akun SUPERADMIN
+
+```bash
+npx tsx scripts/create-superadmin.ts
 ```
 
 Ikuti prompt: masukkan nama, email, dan password.
 
-### 7. Akses Aplikasi
+### 9. Akses Aplikasi
 
 Buka browser:
 
@@ -131,7 +165,16 @@ Buka browser:
 http://IP_VPS_KAMU:3001
 ```
 
-**Selesai.** Tidak ada langkah lain.
+**Selesai.**
+
+### 10. Auto Start Saat VPS Reboot
+
+```bash
+pm2 startup
+pm2 save
+```
+
+Jalankan perintah yang ditampilkan oleh `pm2 startup` (biasanya dimulai dengan `sudo env PATH=...`).
 
 ---
 
@@ -141,10 +184,13 @@ Setiap ada perubahan kode:
 
 ```bash
 git pull
-docker compose up -d --build
+npm install
+npx prisma generate
+npm run build
+sh scripts/start.sh
 ```
 
-Migrasi database berjalan **otomatis** saat container start.
+Migrasi database berjalan **otomatis** saat `sh scripts/start.sh` dijalankan.
 
 ---
 
@@ -152,19 +198,16 @@ Migrasi database berjalan **otomatis** saat container start.
 
 ```bash
 # Lihat log aplikasi (live)
-docker compose logs -f app
+pm2 logs superapp
 
-# Cek status container
-docker compose ps
+# Cek status aplikasi
+pm2 status
 
-# Stop semua container
-docker compose down
+# Restart aplikasi
+pm2 restart superapp
 
-# Stop dan hapus data database (hati-hati!)
-docker compose down -v
-
-# Restart tanpa rebuild
-docker compose restart app
+# Stop aplikasi
+pm2 stop superapp
 
 # Cek IP publik VPS
 curl ifconfig.me
@@ -237,13 +280,14 @@ SUPERAPP/
 │   │   └── Sidebar.tsx
 │   ├── lib/
 │   │   ├── auth.ts
+│   │   ├── auth.config.ts
 │   │   ├── prisma.ts
 │   │   └── stamp.ts            # stampPdf (ACC) + stampPreview (upload)
 │   └── generated/prisma/       # Auto-generated Prisma client
 ├── scripts/
 │   ├── create-superadmin.ts    # Script buat akun SUPERADMIN
 │   ├── stamp_ttd.py            # Script Python stamping TTD
-│   └── start.sh                # Entrypoint container (migrate + start)
+│   └── start.sh                # Migrate DB + start PM2
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
@@ -252,8 +296,7 @@ SUPERAPP/
 │   ├── previews/               # PDF preview contoh TTD (dihapus saat ACC)
 │   ├── results/                # PDF ber-TTD (dihapus otomatis 30 hari)
 │   └── spesimen/               # Gambar PNG tanda tangan
-├── Dockerfile
-├── docker-compose.yml
+├── ecosystem.config.js         # Konfigurasi PM2
 └── .env.example
 ```
 
@@ -279,16 +322,37 @@ Semua endpoint membutuhkan sesi login kecuali yang ditandai publik.
 
 ## Troubleshooting
 
-**Container terus restart / exited**
+**App tidak bisa diakses dari luar VPS**
 ```bash
-docker compose logs app
+sudo ufw allow 3001
 ```
-Baca pesan error, paling sering masalah di `.env` yang salah atau kurang.
+Cek juga Security Group / Firewall Rules di panel provider VPS.
 
-**Port 3001 tidak bisa diakses**
-Pastikan firewall VPS mengizinkan port 3001:
+**Error `UntrustedHost` di log PM2**
+Pastikan `.env` memiliki baris:
+```
+AUTH_TRUST_HOST=true
+```
+Lalu restart: `pm2 restart superapp`
+
+**Error autentikasi database (`P1000`)**
+Password di `DATABASE_URL` tidak cocok dengan password user postgres. Set ulang:
 ```bash
-ufw allow 3001
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'PASSWORD_BARU';"
+```
+Update juga `DATABASE_URL` di `.env`, lalu restart: `pm2 restart superapp`
+
+**Error `Module not found: @/generated/prisma/client`**
+Prisma client belum di-generate. Jalankan:
+```bash
+npx prisma generate
+npm run build
+pm2 restart superapp
+```
+
+**Lihat log error lengkap**
+```bash
+pm2 logs superapp --err
 ```
 
 **Placeholder tidak terdeteksi**
@@ -299,7 +363,7 @@ Admin harus upload file PNG tanda tangan melalui menu Spesimen TTD. Gunakan PNG 
 
 **Lupa password SUPERADMIN**
 ```bash
-docker compose exec app npx tsx scripts/create-superadmin.ts
+npx tsx scripts/create-superadmin.ts
 ```
 Masukkan email yang sama — password akan di-update.
 

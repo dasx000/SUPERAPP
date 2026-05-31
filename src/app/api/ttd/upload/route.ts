@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  stampPreview(filepath, doc.id).catch(() => {});
+  stampPreview(filepath, doc.id).catch((e) => console.error("[stampPreview]", e));
 
   return NextResponse.json({ id: doc.id, filename: doc.filename }, { status: 201 });
 }
