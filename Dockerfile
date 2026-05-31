@@ -25,7 +25,7 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/src/generated ./src/generated
-RUN npm install -g prisma@7
+RUN npm install -g prisma@7 bcryptjs pg tsx
 
 RUN mkdir -p uploads/originals uploads/results uploads/spesimen
 RUN chmod +x scripts/start.sh
