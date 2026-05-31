@@ -1,6 +1,9 @@
+import { config } from "dotenv";
 import { Client } from "pg";
 import bcrypt from "bcryptjs";
 import * as readline from "readline";
+
+config();
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q: string) => new Promise<string>((res) => rl.question(q, res));
