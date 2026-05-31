@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'ttd-superapp',
+      name: 'superapp',
       script: 'node_modules/.bin/next',
       args: 'start -p 3001',
       env_production: {
