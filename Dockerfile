@@ -13,6 +13,7 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV NODE_PATH=/usr/local/lib/node_modules
 
 RUN apk add --no-cache python3 py3-pip
 RUN pip3 install pymupdf --break-system-packages --retries 5 --timeout 120
