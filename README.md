@@ -21,8 +21,8 @@ Aplikasi web untuk penandatanganan dokumen PDF secara elektronik di lingkup kerj
 |---|---|
 | Frontend + Backend | Next.js 16 (App Router) |
 | Autentikasi | NextAuth.js v5 |
-| Database | PostgreSQL 17 + Prisma ORM 7 |
-| PDF Stamping | Python 3.11 + PyMuPDF |
+| Database | PostgreSQL 16 + Prisma ORM 7 |
+| PDF Stamping | Python 3 + PyMuPDF |
 | Deploy | Docker + Docker Compose |
 
 ---
@@ -39,120 +39,211 @@ Sistem akan otomatis mencari teks ini, menghapusnya, lalu menempelkan gambar TTD
 
 ---
 
-## Persiapan Lokal
+## Role Pengguna
+
+| Role | Akses |
+|---|---|
+| `PENYULUH` | Upload dokumen, pantau status, unduh hasil |
+| `ADMIN` | Semua akses penyuluh + ACC/tolak antrian + upload spesimen TTD |
+| `SUPERADMIN` | Semua akses + kelola pengguna |
+
+---
+
+## Deploy ke VPS (Baru)
+
+> VPS hanya butuh **Docker** — tidak perlu Node.js, Python, atau PostgreSQL terinstall di sistem.
+
+### 1. Install Docker di VPS
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+### 2. Clone Repo
+
+```bash
+git clone https://github.com/dasx000/SUPERAPP.git
+cd SUPERAPP
+```
+
+> Repo **private** — saat diminta password, gunakan **Personal Access Token** GitHub.
+> Buat di: GitHub → Settings → Developer Settings → Personal Access Tokens → Tokens (classic) → Generate new token → centang `repo`
+
+### 3. Buat File `.env`
+
+```bash
+nano .env
+```
+
+Isi **persis** seperti ini (ganti nilai yang diperlukan):
+
+```env
+DATABASE_URL="postgresql://postgres:GANTI_PASSWORD@localhost:5432/ttd_superapp"
+NEXTAUTH_SECRET="isi-random-string-panjang-minimal-32-karakter"
+NEXTAUTH_URL="http://IP_VPS_KAMU:3001"
+POSTGRES_PASSWORD=GANTI_PASSWORD
+```
+
+> `DATABASE_URL` boleh pakai `localhost` — docker-compose akan override otomatis ke `@db:5432`.
+> `POSTGRES_PASSWORD` harus sama dengan password di `DATABASE_URL`.
+
+Simpan: `Ctrl+X` → `Y` → Enter
+
+### 4. Jalankan Aplikasi
+
+```bash
+docker compose up -d --build
+```
+
+Build pertama kali membutuhkan **10–20 menit**. Tunggu sampai selesai.
+
+### 5. Cek Status
+
+```bash
+docker compose logs -f app
+```
+
+Tunggu hingga muncul:
+
+```
+✓ Ready in 0ms
+```
+
+### 6. Buat Akun SUPERADMIN
+
+```bash
+docker compose exec app npx tsx scripts/create-superadmin.ts
+```
+
+Ikuti prompt: masukkan nama, email, dan password.
+
+### 7. Akses Aplikasi
+
+Buka browser:
+
+```
+http://IP_VPS_KAMU:3001
+```
+
+**Selesai.** Tidak ada langkah lain.
+
+---
+
+## Update Aplikasi di VPS
+
+Setiap ada perubahan kode:
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Migrasi database berjalan **otomatis** saat container start.
+
+---
+
+## Perintah Berguna
+
+```bash
+# Lihat log aplikasi (live)
+docker compose logs -f app
+
+# Cek status container
+docker compose ps
+
+# Stop semua container
+docker compose down
+
+# Stop dan hapus data database (hati-hati!)
+docker compose down -v
+
+# Restart tanpa rebuild
+docker compose restart app
+
+# Cek IP publik VPS
+curl ifconfig.me
+```
+
+---
+
+## Persiapan Lokal (Development)
 
 ### Prasyarat
 
 - Node.js 20+
-- Python 3.11 + PyMuPDF (`pip install pymupdf`)
-- PostgreSQL 17
+- Python 3 + PyMuPDF (`pip install pymupdf`)
+- PostgreSQL berjalan di lokal
 
 ### 1. Clone & Install
 
 ```bash
-git clone <repo-url>
-cd ttd-superapp
+git clone https://github.com/dasx000/SUPERAPP.git
+cd SUPERAPP
 npm install
 ```
 
-### 2. Konfigurasi Environment
-
-Salin file contoh lalu sesuaikan isinya:
+### 2. Buat File `.env`
 
 ```bash
 cp .env.example .env
 ```
 
-Isi `.env`:
+Sesuaikan isi `.env` untuk lokal:
 
 ```env
 DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/ttd_superapp"
-NEXTAUTH_SECRET="isi-random-string-panjang-minimal-32-karakter"
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="development-secret-key"
+NEXTAUTH_URL="http://localhost:3001"
+POSTGRES_PASSWORD=PASSWORD
 ```
 
-### 3. Buat Database
-
-```bash
-psql -U postgres -c "CREATE DATABASE ttd_superapp;"
-```
-
-### 4. Generate Prisma & Migrate
+### 3. Setup Database
 
 ```bash
 npx prisma generate
-npx prisma migrate dev --name init
+npx prisma migrate deploy
 ```
 
-### 5. Jalankan Dev Server
+### 4. Jalankan Dev Server
 
 ```bash
 npm run dev
 ```
 
-Aplikasi berjalan di **http://localhost:3000**
-
----
-
-## Setup Akun Pertama
-
-### Daftar akun
-
-Buka `http://localhost:3000/register` dan daftarkan akun.
-
-### Jadikan akun sebagai Admin
-
-Setelah daftar, ubah role lewat psql atau pgAdmin:
-
-```sql
-UPDATE "User" SET role = 'ADMIN' WHERE email = 'email-admin@contoh.com';
-```
-
-Role yang tersedia:
-
-| Role | Akses |
-|---|---|
-| `PENYULUH` | Upload dokumen, pantau status, unduh hasil |
-| `ADMIN` | Semua akses penyuluh + ACC/tolak antrian |
-| `SUPERADMIN` | Semua akses + kelola pengguna |
-
-### Upload spesimen TTD Admin
-
-Masuk sebagai Admin, lalu upload file PNG tanda tangan melalui halaman profil.
-File PNG sebaiknya memiliki **background transparan** dan ukuran **di bawah 300KB**.
+Aplikasi berjalan di **http://localhost:3001**
 
 ---
 
 ## Struktur Folder
 
 ```
-ttd-superapp/
+SUPERAPP/
 ├── src/
 │   ├── app/
 │   │   ├── login/              # Halaman login
 │   │   ├── register/           # Halaman daftar
-│   │   ├── dashboard/
-│   │   │   ├── page.tsx        # Dashboard statistik
-│   │   │   ├── ttd/            # Upload & status dokumen (Penyuluh)
-│   │   │   └── antrian/        # ACC / tolak dokumen (Admin)
-│   │   └── api/
-│   │       ├── auth/           # Login, register endpoint
-│   │       └── ttd/            # Upload, list, approve, reject, download
+│   │   └── dashboard/
+│   │       ├── page.tsx        # Dashboard statistik
+│   │       ├── ttd/            # Upload & status dokumen
+│   │       ├── antrian/        # ACC / tolak dokumen (Admin)
+│   │       └── pengguna/       # Kelola pengguna (Superadmin)
 │   ├── components/
-│   │   └── Sidebar.tsx         # Navigasi samping
+│   │   └── Sidebar.tsx
 │   ├── lib/
-│   │   ├── auth.ts             # Konfigurasi NextAuth
-│   │   ├── prisma.ts           # Prisma client
-│   │   └── stamp.ts            # Memanggil Python script stamping
+│   │   ├── auth.ts
+│   │   ├── prisma.ts
+│   │   └── stamp.ts
 │   └── generated/prisma/       # Auto-generated Prisma client
 ├── scripts/
-│   └── stamp_ttd.py            # Script Python stamping TTD
+│   ├── create-superadmin.ts    # Script buat akun SUPERADMIN
+│   ├── stamp_ttd.py            # Script Python stamping TTD
+│   └── start.sh                # Entrypoint container (migrate + start)
 ├── prisma/
-│   ├── schema.prisma           # Definisi model database
-│   └── migrations/             # Riwayat migrasi
-├── uploads/
-│   ├── originals/              # PDF asli yang diupload
-│   └── results/                # PDF hasil TTD
+│   ├── schema.prisma
+│   └── migrations/
+├── uploads/                    # File PDF (tidak di-commit ke git)
 ├── Dockerfile
 ├── docker-compose.yml
 └── .env.example
@@ -162,137 +253,41 @@ ttd-superapp/
 
 ## API Endpoints
 
-Semua endpoint membutuhkan sesi login (cookie session).
+Semua endpoint membutuhkan sesi login kecuali yang ditandai publik.
 
 | Method | Endpoint | Akses | Keterangan |
 |---|---|---|---|
 | `POST` | `/api/auth/register` | Publik | Daftar akun baru |
-| `POST` | `/api/auth/signin` | Publik | Login |
 | `POST` | `/api/ttd/upload` | Penyuluh+ | Upload PDF |
-| `GET` | `/api/ttd/list` | Penyuluh+ | Daftar dokumen |
+| `GET` | `/api/ttd/list` | Penyuluh+ | Daftar dokumen milik sendiri |
 | `POST` | `/api/ttd/[id]/approve` | Admin+ | ACC dokumen |
 | `POST` | `/api/ttd/[id]/reject` | Admin+ | Tolak dokumen |
 | `GET` | `/api/ttd/[id]/download` | Penyuluh+ | Unduh PDF ber-TTD |
 
 ---
 
-## Deploy ke VPS (Ubuntu 22.04)
-
-### Prasyarat VPS
-
-```bash
-sudo apt update && sudo apt install -y docker.io docker-compose-plugin
-sudo systemctl enable --now docker
-```
-
-### 1. Upload project ke VPS
-
-```bash
-# Via SCP
-scp -r ./ttd-superapp user@IP-VPS:/opt/ttd-superapp
-
-# Atau via Git
-git clone <repo-url> /opt/ttd-superapp
-```
-
-### 2. Buat file .env di VPS
-
-```bash
-cd /opt/ttd-superapp
-cp .env.example .env
-nano .env
-```
-
-Isi untuk production:
-
-```env
-DATABASE_URL="postgresql://postgres:PASSWORD_KUAT@db:5432/ttd_superapp"
-NEXTAUTH_SECRET="random-string-sangat-panjang-dan-aman"
-NEXTAUTH_URL="https://domain-kamu.com"
-POSTGRES_PASSWORD="PASSWORD_KUAT"
-```
-
-### 3. Jalankan Docker
-
-```bash
-cd /opt/ttd-superapp
-docker compose up -d --build
-```
-
-### 4. Migrate database (pertama kali)
-
-```bash
-docker compose exec app npx prisma migrate deploy
-```
-
-### 5. Setup Nginx sebagai reverse proxy
-
-Buat file `/etc/nginx/sites-available/sitta`:
-
-```nginx
-server {
-    listen 80;
-    server_name domain-kamu.com;
-
-    client_max_body_size 20M;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-```bash
-sudo ln -s /etc/nginx/sites-available/sitta /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-### 6. HTTPS dengan Certbot
-
-```bash
-sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d domain-kamu.com
-```
-
----
-
-## Update Aplikasi di VPS
-
-```bash
-cd /opt/ttd-superapp
-git pull
-docker compose up -d --build
-docker compose exec app npx prisma migrate deploy
-```
-
----
-
 ## Troubleshooting
 
-**Error: Spesimen TTD admin belum diatur**
-Admin harus upload file PNG tanda tangan terlebih dahulu melalui halaman profil.
+**Container terus restart / exited**
+```bash
+docker compose logs app
+```
+Baca pesan error, paling sering masalah di `.env` yang salah atau kurang.
 
-**Error: Hanya file PDF yang diizinkan**
-Pastikan file yang diupload berformat `.pdf`.
+**Port 3001 tidak bisa diakses**
+Pastikan firewall VPS mengizinkan port 3001:
+```bash
+ufw allow 3001
+```
 
 **Placeholder tidak terdeteksi**
 Pastikan teks di dalam PDF persis `$(ttd_bupati)` — huruf kecil semua, tanpa spasi ekstra.
 
-**Database connection error**
-Periksa `DATABASE_URL` di `.env` sudah benar dan PostgreSQL sedang berjalan.
+**Spesimen TTD belum diatur**
+Admin harus upload file PNG tanda tangan melalui menu Spesimen TTD. Gunakan PNG dengan background transparan, ukuran di bawah 300KB.
 
----
-
-## Roadmap
-
-- [ ] Fitur arsip dokumen
-- [ ] Upload spesimen TTD lewat UI
-- [ ] Notifikasi email saat dokumen di-ACC/tolak
-- [ ] Multiple placeholder per dokumen (`$(ttd_sekda)`, `$(stempel)`, dll)
-- [ ] Tanda Tangan Elektronik (TTE) tersertifikat BSrE
-- [ ] Dashboard laporan & rekap dokumen
+**Lupa password SUPERADMIN**
+```bash
+docker compose exec app npx tsx scripts/create-superadmin.ts
+```
+Masukkan email yang sama — password akan di-update.
