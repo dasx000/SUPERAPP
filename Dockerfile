@@ -25,8 +25,7 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/generated ./src/generated
 COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=deps /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=deps /app/node_modules/.bin/prisma_schema_build_bg.wasm ./node_modules/.bin/prisma_schema_build_bg.wasm
+RUN npm install -g prisma@7
 
 RUN mkdir -p uploads/originals uploads/results uploads/spesimen
 RUN chmod +x scripts/start.sh
