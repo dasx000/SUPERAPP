@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  PENYULUH
+  ADMIN
+  SUPERADMIN
+}
+
+enum DocStatus {
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(PENYULUH)
+  ttdPath   String?
+  createdAt DateTime @default(now())
+
+  documents Document[]
+  auditLogs AuditLog[]
+}
+
+model Document {
+  id           String    @id @default(cuid())
+  filename     String
+  originalPath String
+  resultPath   String?
+  status       DocStatus @default(MENUNGGU)
+  rejectReason String?
+  uploaderId   String
+  uploader     User      @relation(fields: [uploaderId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  action     String
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id])
+  createdAt  DateTime  @default(now())
+}
